@@ -1,0 +1,32 @@
+# Stand-ins for the Apps in a cluster, for crossplane operation render -e. Two
+# are labelled freeze: "true", so the Operation selects those two.
+apiVersion: example.crossplane.io/v1
+kind: App
+metadata:
+  name: payments
+  namespace: default
+  labels:
+    freeze: "true"
+spec:
+  parameters:
+    region: us-west-2
+---
+apiVersion: example.crossplane.io/v1
+kind: App
+metadata:
+  name: checkout
+  namespace: default
+  labels:
+    freeze: "true"
+spec:
+  parameters:
+    region: us-west-2
+---
+apiVersion: example.crossplane.io/v1
+kind: App
+metadata:
+  name: sandbox
+  namespace: default
+spec:
+  parameters:
+    region: us-west-2

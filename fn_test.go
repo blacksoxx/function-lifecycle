@@ -51,9 +51,6 @@ func input(fields string) *structpb.Struct {
 	return resource.MustStructJSON(`{"apiVersion":"lifecycle.fn.crossplane.io/v1beta1","kind":"Input",` + fields + `}`)
 }
 
-// ptr returns a pointer to the supplied value.
-func ptr[T any](v T) *T { return &v }
-
 // desired returns desired state containing the supplied composed resources.
 func desired(resources map[string]string) *fnv1.State {
 	s := &fnv1.State{Resources: map[string]*fnv1.Resource{}}
@@ -103,7 +100,7 @@ func TestRunFunction(t *testing.T) {
 							Type:    "LifecycleMode",
 							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
 							Reason:  "Full",
-							Message: ptr("Composed managed resources use managementPolicies [*] (mode from default)"),
+							Message: new("Composed managed resources use managementPolicies [*] (mode from default)"),
 							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
@@ -134,7 +131,7 @@ func TestRunFunction(t *testing.T) {
 							Type:    "LifecycleMode",
 							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
 							Reason:  "Provision",
-							Message: ptr("Composed managed resources use managementPolicies [Observe Create Update LateInitialize] (mode from annotation lifecycle.fn.crossplane.io/mode)"),
+							Message: new("Composed managed resources use managementPolicies [Observe Create Update LateInitialize] (mode from annotation lifecycle.fn.crossplane.io/mode)"),
 							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
@@ -165,7 +162,7 @@ func TestRunFunction(t *testing.T) {
 							Type:    "LifecycleMode",
 							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
 							Reason:  "ObserveOnly",
-							Message: ptr("Composed managed resources use managementPolicies [Observe] (mode from annotation lifecycle.fn.crossplane.io/mode)"),
+							Message: new("Composed managed resources use managementPolicies [Observe] (mode from annotation lifecycle.fn.crossplane.io/mode)"),
 							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
@@ -196,7 +193,7 @@ func TestRunFunction(t *testing.T) {
 							Type:    "LifecycleMode",
 							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
 							Reason:  "Deprovision",
-							Message: ptr("Composed managed resources use managementPolicies [Observe Create Delete] (mode from annotation lifecycle.fn.crossplane.io/mode)"),
+							Message: new("Composed managed resources use managementPolicies [Observe Create Delete] (mode from annotation lifecycle.fn.crossplane.io/mode)"),
 							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
@@ -228,7 +225,7 @@ func TestRunFunction(t *testing.T) {
 							Type:    "LifecycleMode",
 							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
 							Reason:  "ObserveOnly",
-							Message: ptr("Composed managed resources use managementPolicies [Observe] (mode from input mode)"),
+							Message: new("Composed managed resources use managementPolicies [Observe] (mode from input mode)"),
 							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
@@ -260,7 +257,7 @@ func TestRunFunction(t *testing.T) {
 							Type:    "LifecycleMode",
 							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
 							Reason:  "Provision",
-							Message: ptr("Composed managed resources use managementPolicies [Observe Create Update LateInitialize] (mode from modeRef spec.parameters.managementMode)"),
+							Message: new("Composed managed resources use managementPolicies [Observe Create Update LateInitialize] (mode from modeRef spec.parameters.managementMode)"),
 							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
@@ -292,7 +289,7 @@ func TestRunFunction(t *testing.T) {
 							Type:    "LifecycleMode",
 							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
 							Reason:  "ObserveOnly",
-							Message: ptr("Composed managed resources use managementPolicies [Observe] (mode from modeRef status.lifecycle.mode)"),
+							Message: new("Composed managed resources use managementPolicies [Observe] (mode from modeRef status.lifecycle.mode)"),
 							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
@@ -326,7 +323,7 @@ func TestRunFunction(t *testing.T) {
 							Type:    "LifecycleMode",
 							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
 							Reason:  "Deprovision",
-							Message: ptr("Composed managed resources use managementPolicies [Observe Create Delete] (mode from modeRef context.[apiextensions.crossplane.io/environment].managementMode)"),
+							Message: new("Composed managed resources use managementPolicies [Observe Create Delete] (mode from modeRef context.[apiextensions.crossplane.io/environment].managementMode)"),
 							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
@@ -358,7 +355,7 @@ func TestRunFunction(t *testing.T) {
 							Type:    "LifecycleMode",
 							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
 							Reason:  "ObserveOnly",
-							Message: ptr("Composed managed resources use managementPolicies [Observe] (mode from input mode)"),
+							Message: new("Composed managed resources use managementPolicies [Observe] (mode from input mode)"),
 							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
@@ -395,7 +392,7 @@ func TestRunFunction(t *testing.T) {
 							Type:    "LifecycleMode",
 							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
 							Reason:  "ObserveOnly",
-							Message: ptr("Composed managed resources use managementPolicies [Observe] (mode from annotation lifecycle.fn.crossplane.io/mode)"),
+							Message: new("Composed managed resources use managementPolicies [Observe] (mode from annotation lifecycle.fn.crossplane.io/mode)"),
 							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
@@ -470,7 +467,7 @@ func TestRunFunction(t *testing.T) {
 							Type:    "LifecycleMode",
 							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
 							Reason:  "ObserveOnly",
-							Message: ptr("Composed managed resources use managementPolicies [Observe] (mode from annotation lifecycle.fn.crossplane.io/mode)"),
+							Message: new("Composed managed resources use managementPolicies [Observe] (mode from annotation lifecycle.fn.crossplane.io/mode)"),
 							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},

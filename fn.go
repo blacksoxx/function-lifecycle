@@ -41,6 +41,12 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 	// steps into our response. We only change what we need to.
 	rsp := response.To(req, response.DefaultTTL)
 
+	// An Operation has no XR. There the function sets the mode annotation on
+	// the resources the Operation requires instead. See operation.go.
+	if req.GetObserved().GetComposite() == nil {
+		return f.runOperation(req, rsp), nil
+	}
+
 	xr, err := request.GetObservedCompositeResource(req)
 	if err != nil {
 		response.Fatal(rsp, errors.Wrap(err, "cannot get observed composite resource"))

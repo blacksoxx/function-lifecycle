@@ -61,6 +61,21 @@ crossplane composition render example/xr.yaml example/composition-environment.ya
 `--context-values` fakes what function-environment-configs would put in the
 context, so you can try this without a cluster.
 
+## Run it as an Operation
+
+`operation.yaml` sets the mode annotation on the Apps in `apps.yaml` that are
+labelled `freeze: "true"`. Only the function in terminal 1 needs to run:
+
+```shell
+crossplane operation render example/operation.yaml example/functions.yaml \
+  -e example/apps.yaml -r --crossplane-binary=$(which crossplane-core)
+```
+
+`-e` passes the Apps in `apps.yaml` as if they were in the cluster. The output
+shows the Operation, with the two Apps it changed in
+`status.appliedResourceRefs`, then the patch it applies to each.
+`cronoperation.yaml` renders the same way.
+
 ## Test every example
 
 With both functions running, render every example and check the output:

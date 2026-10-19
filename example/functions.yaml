@@ -1,0 +1,14 @@
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Function
+metadata:
+  name: function-lifecycle
+  annotations:
+    # This tells crossplane render to connect to the function locally.
+    render.crossplane.io/runtime: Development
+    # Use 127.0.0.1, not the default localhost. On some networks resolving
+    # localhost adds about 10 seconds to every render.
+    render.crossplane.io/runtime-development-target: 127.0.0.1:9443
+spec:
+  # This is ignored when using the Development runtime.
+  package: function-lifecycle

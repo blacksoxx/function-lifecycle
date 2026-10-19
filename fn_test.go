@@ -51,6 +51,9 @@ func input(fields string) *structpb.Struct {
 	return resource.MustStructJSON(`{"apiVersion":"lifecycle.fn.crossplane.io/v1beta1","kind":"Input",` + fields + `}`)
 }
 
+// ptr returns a pointer to the supplied value.
+func ptr[T any](v T) *T { return &v }
+
 // desired returns desired state containing the supplied composed resources.
 func desired(resources map[string]string) *fnv1.State {
 	s := &fnv1.State{Resources: map[string]*fnv1.Resource{}}
@@ -91,8 +94,17 @@ func TestRunFunction(t *testing.T) {
 					Results: []*fnv1.Result{
 						{
 							Severity: fnv1.Severity_SEVERITY_NORMAL,
-							Message:  "Full: set managementPolicies [*] on 1 managed resources (1 skipped)",
+							Message:  "Full (from default): set managementPolicies [*] on 1 managed resources (1 skipped)",
 							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+					Conditions: []*fnv1.Condition{
+						{
+							Type:    "LifecycleMode",
+							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
+							Reason:  "Full",
+							Message: ptr("Composed managed resources use managementPolicies [*] (mode from default)"),
+							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
 				},
@@ -113,8 +125,17 @@ func TestRunFunction(t *testing.T) {
 					Results: []*fnv1.Result{
 						{
 							Severity: fnv1.Severity_SEVERITY_NORMAL,
-							Message:  "Provision: set managementPolicies [Observe Create Update LateInitialize] on 1 managed resources (1 skipped)",
+							Message:  "Provision (from annotation lifecycle.fn.crossplane.io/mode): set managementPolicies [Observe Create Update LateInitialize] on 1 managed resources (1 skipped)",
 							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+					Conditions: []*fnv1.Condition{
+						{
+							Type:    "LifecycleMode",
+							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
+							Reason:  "Provision",
+							Message: ptr("Composed managed resources use managementPolicies [Observe Create Update LateInitialize] (mode from annotation lifecycle.fn.crossplane.io/mode)"),
+							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
 				},
@@ -135,8 +156,17 @@ func TestRunFunction(t *testing.T) {
 					Results: []*fnv1.Result{
 						{
 							Severity: fnv1.Severity_SEVERITY_NORMAL,
-							Message:  "ObserveOnly: set managementPolicies [Observe] on 1 managed resources (0 skipped)",
+							Message:  "ObserveOnly (from annotation lifecycle.fn.crossplane.io/mode): set managementPolicies [Observe] on 1 managed resources (0 skipped)",
 							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+					Conditions: []*fnv1.Condition{
+						{
+							Type:    "LifecycleMode",
+							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
+							Reason:  "ObserveOnly",
+							Message: ptr("Composed managed resources use managementPolicies [Observe] (mode from annotation lifecycle.fn.crossplane.io/mode)"),
+							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
 				},
@@ -157,8 +187,17 @@ func TestRunFunction(t *testing.T) {
 					Results: []*fnv1.Result{
 						{
 							Severity: fnv1.Severity_SEVERITY_NORMAL,
-							Message:  "Deprovision: set managementPolicies [Observe Create Delete] on 1 managed resources (0 skipped)",
+							Message:  "Deprovision (from annotation lifecycle.fn.crossplane.io/mode): set managementPolicies [Observe Create Delete] on 1 managed resources (0 skipped)",
 							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+					Conditions: []*fnv1.Condition{
+						{
+							Type:    "LifecycleMode",
+							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
+							Reason:  "Deprovision",
+							Message: ptr("Composed managed resources use managementPolicies [Observe Create Delete] (mode from annotation lifecycle.fn.crossplane.io/mode)"),
+							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
 				},
@@ -180,8 +219,17 @@ func TestRunFunction(t *testing.T) {
 					Results: []*fnv1.Result{
 						{
 							Severity: fnv1.Severity_SEVERITY_NORMAL,
-							Message:  "ObserveOnly: set managementPolicies [Observe] on 1 managed resources (0 skipped)",
+							Message:  "ObserveOnly (from input mode): set managementPolicies [Observe] on 1 managed resources (0 skipped)",
 							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+					Conditions: []*fnv1.Condition{
+						{
+							Type:    "LifecycleMode",
+							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
+							Reason:  "ObserveOnly",
+							Message: ptr("Composed managed resources use managementPolicies [Observe] (mode from input mode)"),
+							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
 				},
@@ -203,8 +251,17 @@ func TestRunFunction(t *testing.T) {
 					Results: []*fnv1.Result{
 						{
 							Severity: fnv1.Severity_SEVERITY_NORMAL,
-							Message:  "Provision: set managementPolicies [Observe Create Update LateInitialize] on 1 managed resources (0 skipped)",
+							Message:  "Provision (from modeRef spec.parameters.managementMode): set managementPolicies [Observe Create Update LateInitialize] on 1 managed resources (0 skipped)",
 							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+					Conditions: []*fnv1.Condition{
+						{
+							Type:    "LifecycleMode",
+							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
+							Reason:  "Provision",
+							Message: ptr("Composed managed resources use managementPolicies [Observe Create Update LateInitialize] (mode from modeRef spec.parameters.managementMode)"),
+							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
 				},
@@ -226,8 +283,17 @@ func TestRunFunction(t *testing.T) {
 					Results: []*fnv1.Result{
 						{
 							Severity: fnv1.Severity_SEVERITY_NORMAL,
-							Message:  "ObserveOnly: set managementPolicies [Observe] on 1 managed resources (0 skipped)",
+							Message:  "ObserveOnly (from modeRef status.lifecycle.mode): set managementPolicies [Observe] on 1 managed resources (0 skipped)",
 							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+					Conditions: []*fnv1.Condition{
+						{
+							Type:    "LifecycleMode",
+							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
+							Reason:  "ObserveOnly",
+							Message: ptr("Composed managed resources use managementPolicies [Observe] (mode from modeRef status.lifecycle.mode)"),
+							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
 				},
@@ -251,8 +317,17 @@ func TestRunFunction(t *testing.T) {
 					Results: []*fnv1.Result{
 						{
 							Severity: fnv1.Severity_SEVERITY_NORMAL,
-							Message:  "Deprovision: set managementPolicies [Observe Create Delete] on 1 managed resources (0 skipped)",
+							Message:  "Deprovision (from modeRef context.[apiextensions.crossplane.io/environment].managementMode): set managementPolicies [Observe Create Delete] on 1 managed resources (0 skipped)",
 							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+					Conditions: []*fnv1.Condition{
+						{
+							Type:    "LifecycleMode",
+							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
+							Reason:  "Deprovision",
+							Message: ptr("Composed managed resources use managementPolicies [Observe Create Delete] (mode from modeRef context.[apiextensions.crossplane.io/environment].managementMode)"),
+							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
 				},
@@ -274,8 +349,17 @@ func TestRunFunction(t *testing.T) {
 					Results: []*fnv1.Result{
 						{
 							Severity: fnv1.Severity_SEVERITY_NORMAL,
-							Message:  "ObserveOnly: set managementPolicies [Observe] on 1 managed resources (0 skipped)",
+							Message:  "ObserveOnly (from input mode): set managementPolicies [Observe] on 1 managed resources (0 skipped)",
 							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+					Conditions: []*fnv1.Condition{
+						{
+							Type:    "LifecycleMode",
+							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
+							Reason:  "ObserveOnly",
+							Message: ptr("Composed managed resources use managementPolicies [Observe] (mode from input mode)"),
+							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
 				},
@@ -302,8 +386,17 @@ func TestRunFunction(t *testing.T) {
 					Results: []*fnv1.Result{
 						{
 							Severity: fnv1.Severity_SEVERITY_NORMAL,
-							Message:  "ObserveOnly: set managementPolicies [Observe] on 1 managed resources (0 skipped)",
+							Message:  "ObserveOnly (from annotation lifecycle.fn.crossplane.io/mode): set managementPolicies [Observe] on 1 managed resources (0 skipped)",
 							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+					Conditions: []*fnv1.Condition{
+						{
+							Type:    "LifecycleMode",
+							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
+							Reason:  "ObserveOnly",
+							Message: ptr("Composed managed resources use managementPolicies [Observe] (mode from annotation lifecycle.fn.crossplane.io/mode)"),
+							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
 				},
@@ -347,7 +440,7 @@ func TestRunFunction(t *testing.T) {
 					Results: []*fnv1.Result{
 						{
 							Severity: fnv1.Severity_SEVERITY_FATAL,
-							Message:  `unknown mode "Orphan": must be one of Full, Provision, ObserveOnly, Deprovision`,
+							Message:  `invalid mode from annotation lifecycle.fn.crossplane.io/mode: unknown mode "Orphan": must be one of Full, Provision, ObserveOnly, Deprovision`,
 							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
@@ -368,8 +461,17 @@ func TestRunFunction(t *testing.T) {
 					Results: []*fnv1.Result{
 						{
 							Severity: fnv1.Severity_SEVERITY_NORMAL,
-							Message:  "ObserveOnly: set managementPolicies [Observe] on 0 managed resources (0 skipped)",
+							Message:  "ObserveOnly (from annotation lifecycle.fn.crossplane.io/mode): set managementPolicies [Observe] on 0 managed resources (0 skipped)",
 							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+					Conditions: []*fnv1.Condition{
+						{
+							Type:    "LifecycleMode",
+							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
+							Reason:  "ObserveOnly",
+							Message: ptr("Composed managed resources use managementPolicies [Observe] (mode from annotation lifecycle.fn.crossplane.io/mode)"),
+							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
 				},

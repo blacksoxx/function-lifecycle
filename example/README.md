@@ -41,3 +41,19 @@ step's results.
 | `xr-observe-only.yaml` | ObserveOnly | `[Observe]` |
 | `xr-deprovision.yaml` | Deprovision | `[Observe, Create, Delete]` |
 | `xr-invalid.yaml` | Orphan | fatal result, nothing rendered |
+| `xr-spec-mode.yaml` | ObserveOnly, from `spec.parameters.managementMode` via `modeRef` | `[Observe]` |
+
+The annotation always wins. Without it, `modeRef` is read, then the input's
+`mode`, then `Full`.
+
+To drive the mode from the pipeline context, for example an EnvironmentConfig
+loaded by function-environment-configs, use `composition-environment.yaml`:
+
+```shell
+crossplane composition render example/xr.yaml example/composition-environment.yaml \
+  example/functions.yaml -r --crossplane-binary=$(which crossplane-core) \
+  --context-values='apiextensions.crossplane.io/environment={"managementMode":"Deprovision"}'
+```
+
+`--context-values` fakes what function-environment-configs would put in the
+context, so you can try this without a cluster.

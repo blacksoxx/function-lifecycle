@@ -1,0 +1,64 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: apps-environment.example.crossplane.io
+spec:
+  compositeTypeRef:
+    apiVersion: example.crossplane.io/v1
+    kind: App
+  mode: Pipeline
+  pipeline:
+  # Step 1 composes resources. Any function could do this.
+  - step: compose
+    functionRef:
+      name: function-patch-and-transform
+    input:
+      apiVersion: pt.fn.crossplane.io/v1beta1
+      kind: Resources
+      resources:
+      # A managed resource from provider-upjet-aws.
+      - name: bucket
+        base:
+          apiVersion: s3.aws.m.upbound.io/v1beta1
+          kind: Bucket
+          spec:
+            forProvider:
+              region: us-east-2
+        patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.region
+          toFieldPath: spec.forProvider.region
+      # A managed resource from provider-kubernetes.
+      - name: config
+        base:
+          apiVersion: kubernetes.m.crossplane.io/v1alpha1
+          kind: Object
+          spec:
+            forProvider:
+              manifest:
+                apiVersion: v1
+                kind: ConfigMap
+                data:
+                  owner: platform-team
+            providerConfigRef:
+              kind: ProviderConfig
+              name: kubernetes-provider
+      # A plain Kubernetes object. Not a managed resource.
+      - name: settings
+        base:
+          apiVersion: v1
+          kind: ConfigMap
+          data:
+            tier: gold
+  # Step 2 rewrites what step 1 composed.
+  - step: lifecycle
+    functionRef:
+      name: function-lifecycle
+    input:
+      apiVersion: lifecycle.fn.crossplane.io/v1beta1
+      kind: Input
+      # Used when there's no mode annotation and modeRef resolves to nothing.
+      mode: Full
+      # Drive the mode from an EnvironmentConfig, for example a platform-wide
+      # change freeze. function-environment-configs puts it in the context.
+      modeRef: context.[apiextensions.crossplane.io/environment].managementMode

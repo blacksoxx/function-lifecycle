@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"strings"
+
+	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
 
 	"github.com/crossplane/function-sdk-go/errors"
 	"github.com/crossplane/function-sdk-go/logging"
@@ -9,6 +12,8 @@ import (
 	"github.com/crossplane/function-sdk-go/request"
 	"github.com/crossplane/function-sdk-go/resource"
 	"github.com/crossplane/function-sdk-go/response"
+
+	"github.com/crossplane/function-lifecycle/input/v1beta1"
 )
 
 // AnnotationMode on the XR selects the lifecycle mode of its composed
@@ -36,15 +41,25 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 		return rsp, nil
 	}
 
-	mode := ModeFull
-	if v, ok := xr.Resource.GetAnnotations()[AnnotationMode]; ok {
-		mode = Mode(v)
+	// The input is optional. Without it we rely on the annotation alone.
+	in := &v1beta1.Input{}
+	if req.GetInput() != nil {
+		if err := request.GetInput(req, in); err != nil {
+			response.Fatal(rsp, errors.Wrapf(err, "cannot get Function input from %T", req))
+			return rsp, nil
+		}
+	}
+
+	mode, err := resolveMode(req, xr, in)
+	if err != nil {
+		response.Fatal(rsp, err)
+		return rsp, nil
 	}
 
 	// Fail closed: a typo in the mode must never fall back to Full.
 	policies, err := mode.Policies()
 	if err != nil {
-		response.Fatal(rsp, errors.Wrapf(err, "invalid %s annotation", AnnotationMode))
+		response.Fatal(rsp, err)
 		return rsp, nil
 	}
 
@@ -76,6 +91,47 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 	response.Normalf(rsp, "%s: set managementPolicies %v on %d managed resources (%d skipped)", mode, policies, applied, skipped)
 
 	return rsp, nil
+}
+
+// resolveMode returns the lifecycle mode. In order of precedence it comes from
+// the XR's mode annotation, the field ModeRef points to, the input's mode, or
+// defaults to Full.
+func resolveMode(req *fnv1.RunFunctionRequest, xr *resource.Composite, in *v1beta1.Input) (Mode, error) {
+	if v, ok := xr.Resource.GetAnnotations()[AnnotationMode]; ok {
+		return Mode(v), nil
+	}
+	if in.ModeRef != "" {
+		v, err := lookup(req, xr, in.ModeRef)
+		if err != nil {
+			return "", err
+		}
+		if v != "" {
+			return Mode(v), nil
+		}
+	}
+	if in.Mode != "" {
+		return Mode(in.Mode), nil
+	}
+	return ModeFull, nil
+}
+
+// lookup returns the string at the supplied spec., status., or context. path.
+// It returns an empty string if nothing is set at the path.
+func lookup(req *fnv1.RunFunctionRequest, xr *resource.Composite, ref string) (string, error) {
+	var v string
+	var err error
+	switch {
+	case strings.HasPrefix(ref, "spec."), strings.HasPrefix(ref, "status."):
+		v, err = xr.Resource.GetString(ref)
+	case strings.HasPrefix(ref, "context."):
+		v, err = fieldpath.Pave(req.GetContext().AsMap()).GetString(strings.TrimPrefix(ref, "context."))
+	default:
+		return "", errors.Errorf("modeRef %q must be a spec., status., or context. path", ref)
+	}
+	if fieldpath.IsNotFound(err) {
+		return "", nil
+	}
+	return v, errors.Wrapf(err, "cannot resolve modeRef %q", ref)
 }
 
 // isManaged returns true if the composed resource looks like a managed

@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/crossplane/function-sdk-go/logging"
 	fnv1 "github.com/crossplane/function-sdk-go/proto/v1"
@@ -35,6 +36,19 @@ func xr(mode string) *fnv1.State {
 	return &fnv1.State{Composite: &fnv1.Resource{Resource: resource.MustStructJSON(
 		`{"apiVersion":"example.crossplane.io/v1","kind":"App","metadata":{"name":"my-app","namespace":"default"` + annotations + `}}`,
 	)}}
+}
+
+// xrWith returns an observed XR without a mode annotation, plus the supplied
+// top-level JSON fields, for example `"spec":{"parameters":{}}`.
+func xrWith(fields string) *fnv1.State {
+	return &fnv1.State{Composite: &fnv1.Resource{Resource: resource.MustStructJSON(
+		`{"apiVersion":"example.crossplane.io/v1","kind":"App","metadata":{"name":"my-app","namespace":"default"},` + fields + `}`,
+	)}}
+}
+
+// input returns Function input with the supplied JSON fields.
+func input(fields string) *structpb.Struct {
+	return resource.MustStructJSON(`{"apiVersion":"lifecycle.fn.crossplane.io/v1beta1","kind":"Input",` + fields + `}`)
 }
 
 // desired returns desired state containing the supplied composed resources.
@@ -150,6 +164,174 @@ func TestRunFunction(t *testing.T) {
 				},
 			},
 		},
+		"InputMode": {
+			reason: "Without an annotation or a modeRef the Function should use the input's mode",
+			args: args{
+				req: &fnv1.RunFunctionRequest{
+					Input:    input(`"mode":"ObserveOnly"`),
+					Observed: xr(""),
+					Desired:  desired(map[string]string{"bucket": bucket}),
+				},
+			},
+			want: want{
+				rsp: &fnv1.RunFunctionResponse{
+					Meta:    &fnv1.ResponseMeta{Ttl: durationpb.New(response.DefaultTTL)},
+					Desired: desired(map[string]string{"bucket": bucketWith(`["Observe"]`)}),
+					Results: []*fnv1.Result{
+						{
+							Severity: fnv1.Severity_SEVERITY_NORMAL,
+							Message:  "ObserveOnly: set managementPolicies [Observe] on 1 managed resources (0 skipped)",
+							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+				},
+			},
+		},
+		"ModeRefFromSpec": {
+			reason: "The Function should read the mode from the XR spec field modeRef points to",
+			args: args{
+				req: &fnv1.RunFunctionRequest{
+					Input:    input(`"mode":"ObserveOnly","modeRef":"spec.parameters.managementMode"`),
+					Observed: xrWith(`"spec":{"parameters":{"managementMode":"Provision"}}`),
+					Desired:  desired(map[string]string{"bucket": bucket}),
+				},
+			},
+			want: want{
+				rsp: &fnv1.RunFunctionResponse{
+					Meta:    &fnv1.ResponseMeta{Ttl: durationpb.New(response.DefaultTTL)},
+					Desired: desired(map[string]string{"bucket": bucketWith(`["Observe","Create","Update","LateInitialize"]`)}),
+					Results: []*fnv1.Result{
+						{
+							Severity: fnv1.Severity_SEVERITY_NORMAL,
+							Message:  "Provision: set managementPolicies [Observe Create Update LateInitialize] on 1 managed resources (0 skipped)",
+							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+				},
+			},
+		},
+		"ModeRefFromStatus": {
+			reason: "The Function should read the mode from the XR status field modeRef points to",
+			args: args{
+				req: &fnv1.RunFunctionRequest{
+					Input:    input(`"modeRef":"status.lifecycle.mode"`),
+					Observed: xrWith(`"status":{"lifecycle":{"mode":"ObserveOnly"}}`),
+					Desired:  desired(map[string]string{"bucket": bucket}),
+				},
+			},
+			want: want{
+				rsp: &fnv1.RunFunctionResponse{
+					Meta:    &fnv1.ResponseMeta{Ttl: durationpb.New(response.DefaultTTL)},
+					Desired: desired(map[string]string{"bucket": bucketWith(`["Observe"]`)}),
+					Results: []*fnv1.Result{
+						{
+							Severity: fnv1.Severity_SEVERITY_NORMAL,
+							Message:  "ObserveOnly: set managementPolicies [Observe] on 1 managed resources (0 skipped)",
+							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+				},
+			},
+		},
+		"ModeRefFromContext": {
+			reason: "The Function should read the mode from the pipeline context, for example an EnvironmentConfig",
+			args: args{
+				req: &fnv1.RunFunctionRequest{
+					Input:    input(`"modeRef":"context.[apiextensions.crossplane.io/environment].managementMode"`),
+					Observed: xr(""),
+					Desired:  desired(map[string]string{"bucket": bucket}),
+					Context:  resource.MustStructJSON(`{"apiextensions.crossplane.io/environment":{"managementMode":"Deprovision"}}`),
+				},
+			},
+			want: want{
+				rsp: &fnv1.RunFunctionResponse{
+					Meta:    &fnv1.ResponseMeta{Ttl: durationpb.New(response.DefaultTTL)},
+					Desired: desired(map[string]string{"bucket": bucketWith(`["Observe","Create","Delete"]`)}),
+					Context: resource.MustStructJSON(`{"apiextensions.crossplane.io/environment":{"managementMode":"Deprovision"}}`),
+					Results: []*fnv1.Result{
+						{
+							Severity: fnv1.Severity_SEVERITY_NORMAL,
+							Message:  "Deprovision: set managementPolicies [Observe Create Delete] on 1 managed resources (0 skipped)",
+							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+				},
+			},
+		},
+		"UnsetModeRefFallsBackToInputMode": {
+			reason: "When nothing is set at modeRef the Function should fall back to the input's mode",
+			args: args{
+				req: &fnv1.RunFunctionRequest{
+					Input:    input(`"mode":"ObserveOnly","modeRef":"spec.parameters.managementMode"`),
+					Observed: xrWith(`"spec":{"parameters":{}}`),
+					Desired:  desired(map[string]string{"bucket": bucket}),
+				},
+			},
+			want: want{
+				rsp: &fnv1.RunFunctionResponse{
+					Meta:    &fnv1.ResponseMeta{Ttl: durationpb.New(response.DefaultTTL)},
+					Desired: desired(map[string]string{"bucket": bucketWith(`["Observe"]`)}),
+					Results: []*fnv1.Result{
+						{
+							Severity: fnv1.Severity_SEVERITY_NORMAL,
+							Message:  "ObserveOnly: set managementPolicies [Observe] on 1 managed resources (0 skipped)",
+							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+				},
+			},
+		},
+		"AnnotationBeatsModeRef": {
+			reason: "The XR annotation is the operator's break-glass lever and should beat modeRef",
+			args: args{
+				req: &fnv1.RunFunctionRequest{
+					Input: input(`"modeRef":"spec.parameters.managementMode"`),
+					Observed: &fnv1.State{Composite: &fnv1.Resource{Resource: resource.MustStructJSON(`{
+						"apiVersion": "example.crossplane.io/v1",
+						"kind": "App",
+						"metadata": {"name": "my-app", "annotations": {"lifecycle.fn.crossplane.io/mode": "ObserveOnly"}},
+						"spec": {"parameters": {"managementMode": "Provision"}}
+					}`)}},
+					Desired: desired(map[string]string{"bucket": bucket}),
+				},
+			},
+			want: want{
+				rsp: &fnv1.RunFunctionResponse{
+					Meta:    &fnv1.ResponseMeta{Ttl: durationpb.New(response.DefaultTTL)},
+					Desired: desired(map[string]string{"bucket": bucketWith(`["Observe"]`)}),
+					Results: []*fnv1.Result{
+						{
+							Severity: fnv1.Severity_SEVERITY_NORMAL,
+							Message:  "ObserveOnly: set managementPolicies [Observe] on 1 managed resources (0 skipped)",
+							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+				},
+			},
+		},
+		"InvalidModeRefIsFatal": {
+			reason: "A modeRef that doesn't start with spec., status., or context. should return a fatal result",
+			args: args{
+				req: &fnv1.RunFunctionRequest{
+					Input:    input(`"modeRef":"metadata.name"`),
+					Observed: xr(""),
+					Desired:  desired(map[string]string{"bucket": bucket}),
+				},
+			},
+			want: want{
+				rsp: &fnv1.RunFunctionResponse{
+					Meta:    &fnv1.ResponseMeta{Ttl: durationpb.New(response.DefaultTTL)},
+					Desired: desired(map[string]string{"bucket": bucket}),
+					Results: []*fnv1.Result{
+						{
+							Severity: fnv1.Severity_SEVERITY_FATAL,
+							Message:  `modeRef "metadata.name" must be a spec., status., or context. path`,
+							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+				},
+			},
+		},
 		"UnknownModeIsFatal": {
 			reason: "An unknown mode should return a fatal result and leave the desired state untouched",
 			args: args{
@@ -165,7 +347,7 @@ func TestRunFunction(t *testing.T) {
 					Results: []*fnv1.Result{
 						{
 							Severity: fnv1.Severity_SEVERITY_FATAL,
-							Message:  `invalid lifecycle.fn.crossplane.io/mode annotation: unknown mode "Orphan": must be one of Full, Provision, ObserveOnly, Deprovision`,
+							Message:  `unknown mode "Orphan": must be one of Full, Provision, ObserveOnly, Deprovision`,
 							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},

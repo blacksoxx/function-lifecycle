@@ -3,10 +3,10 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
-  name: inputs.template.fn.crossplane.io
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: inputs.lifecycle.fn.crossplane.io
 spec:
-  group: template.fn.crossplane.io
+  group: lifecycle.fn.crossplane.io
   names:
     categories:
     - crossplane
@@ -19,7 +19,9 @@ spec:
   - name: v1beta1
     schema:
       openAPIV3Schema:
-        description: Input can be used to provide input to this Function.
+        description: |-
+          Input configures how function-lifecycle picks the lifecycle mode. The XR's
+          lifecycle.fn.crossplane.io/mode annotation always takes precedence.
         properties:
           apiVersion:
             description: |-
@@ -27,10 +29,6 @@ spec:
               Servers should convert recognized schemas to the latest internal value, and
               may reject unrecognized values.
               More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
-            type: string
-          example:
-            description: Example is an example field. Replace it with whatever input
-              you need. :)
             type: string
           kind:
             description: |-
@@ -42,8 +40,23 @@ spec:
             type: string
           metadata:
             type: object
-        required:
-        - example
+          mode:
+            description: |-
+              Mode applies when there is no mode annotation and ModeRef doesn't
+              resolve to a value. Defaults to Full.
+            enum:
+            - Full
+            - Provision
+            - ObserveOnly
+            - Deprovision
+            type: string
+          modeRef:
+            description: |-
+              ModeRef reads the mode from a field of the XR or the pipeline context.
+              It must start with spec., status., or context. Use brackets for keys
+              that contain dots, for example
+              context.[apiextensions.crossplane.io/environment].managementMode.
+            type: string
         type: object
     served: true
     storage: true

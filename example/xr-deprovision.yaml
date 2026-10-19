@@ -1,0 +1,10 @@
+apiVersion: example.crossplane.io/v1
+kind: App
+metadata:
+  name: my-app
+  namespace: default
+  annotations:
+    lifecycle.fn.crossplane.io/mode: Deprovision
+spec:
+  parameters:
+    region: us-west-2

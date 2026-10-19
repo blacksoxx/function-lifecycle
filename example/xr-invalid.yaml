@@ -1,0 +1,11 @@
+# An unknown mode must fail closed, never fall back to Full.
+apiVersion: example.crossplane.io/v1
+kind: App
+metadata:
+  name: my-app
+  namespace: default
+  annotations:
+    lifecycle.fn.crossplane.io/mode: Orphan
+spec:
+  parameters:
+    region: us-west-2

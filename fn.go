@@ -16,9 +16,14 @@ import (
 	"github.com/crossplane/function-lifecycle/input/v1beta1"
 )
 
-// AnnotationMode on the XR selects the lifecycle mode of its composed
-// resources.
-const AnnotationMode = "lifecycle.fn.crossplane.io/mode"
+const (
+	// AnnotationMode on the XR selects the lifecycle mode of its composed
+	// resources.
+	AnnotationMode = "lifecycle.fn.crossplane.io/mode"
+
+	// ConditionTypeLifecycleMode reports the active mode on the XR.
+	ConditionTypeLifecycleMode = "LifecycleMode"
+)
 
 // Function sets spec.managementPolicies on composed managed resources.
 type Function struct {
@@ -50,7 +55,7 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 		}
 	}
 
-	mode, err := resolveMode(req, xr, in)
+	mode, source, err := resolveMode(req, xr, in)
 	if err != nil {
 		response.Fatal(rsp, err)
 		return rsp, nil
@@ -59,9 +64,10 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 	// Fail closed: a typo in the mode must never fall back to Full.
 	policies, err := mode.Policies()
 	if err != nil {
-		response.Fatal(rsp, err)
+		response.Fatal(rsp, errors.Wrapf(err, "invalid mode from %s", source))
 		return rsp, nil
 	}
+	f.log.Debug("Resolved lifecycle mode", "mode", mode, "source", source, "policies", policies)
 
 	desired, err := request.GetDesiredComposedResources(req)
 	if err != nil {
@@ -80,6 +86,7 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 			response.Fatal(rsp, errors.Wrapf(err, "cannot set spec.managementPolicies on composed resource %q", name))
 			return rsp, nil
 		}
+		f.log.Debug("Set management policies", "resource", name, "policies", policies)
 		applied++
 	}
 
@@ -88,31 +95,44 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 		return rsp, nil
 	}
 
-	response.Normalf(rsp, "%s: set managementPolicies %v on %d managed resources (%d skipped)", mode, policies, applied, skipped)
+	// Results become events on the XR. Conditions stay on the XR's status, so
+	// kubectl get and crossplane beta trace show the active mode.
+	response.Normalf(rsp, "%s (from %s): set managementPolicies %v on %d managed resources (%d skipped)", mode, source, policies, applied, skipped)
+
+	// TODO(lab-04) 2: set the LifecycleMode condition on the XR. Add "fmt" to
+	// the imports, then add:
+	//
+	//	response.ConditionTrue(rsp, ConditionTypeLifecycleMode, string(mode)).
+	//		WithMessage(fmt.Sprintf("Composed managed resources use managementPolicies %v (mode from %s)", policies, source)).
+	//		TargetComposite()
 
 	return rsp, nil
 }
 
-// resolveMode returns the lifecycle mode. In order of precedence it comes from
-// the XR's mode annotation, the field ModeRef points to, the input's mode, or
-// defaults to Full.
-func resolveMode(req *fnv1.RunFunctionRequest, xr *resource.Composite, in *v1beta1.Input) (Mode, error) {
+// resolveMode returns the lifecycle mode and where it came from. In order of
+// precedence it comes from the XR's mode annotation, the field ModeRef points
+// to, the input's mode, or defaults to Full.
+func resolveMode(req *fnv1.RunFunctionRequest, xr *resource.Composite, in *v1beta1.Input) (Mode, string, error) {
+	// TODO(lab-04) 1: the second return value says where the mode came from.
+	// Replace "" in each return that has a mode with "annotation " + AnnotationMode,
+	// "modeRef " + in.ModeRef, "input mode", or "default". Keep "" when you
+	// return an error.
 	if v, ok := xr.Resource.GetAnnotations()[AnnotationMode]; ok {
-		return Mode(v), nil
+		return Mode(v), "", nil
 	}
 	if in.ModeRef != "" {
 		v, err := lookup(req, xr, in.ModeRef)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 		if v != "" {
-			return Mode(v), nil
+			return Mode(v), "", nil
 		}
 	}
 	if in.Mode != "" {
-		return Mode(in.Mode), nil
+		return Mode(in.Mode), "", nil
 	}
-	return ModeFull, nil
+	return ModeFull, "", nil
 }
 
 // lookup returns the string at the supplied spec., status., or context. path.

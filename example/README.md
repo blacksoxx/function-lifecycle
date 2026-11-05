@@ -1,8 +1,11 @@
 # Example manifests
 
-A two-step pipeline: `function-patch-and-transform` composes a Bucket, a
-provider-kubernetes Object, and a plain ConfigMap. `function-lifecycle` then
-sets `spec.managementPolicies` on the two managed resources.
+A two-step pipeline:
+
+1. `function-patch-and-transform` composes a Bucket, a provider-kubernetes
+   Object, and a plain ConfigMap.
+2. `function-lifecycle` sets `spec.managementPolicies` on the two managed
+   resources and skips the ConfigMap.
 
 Render runs without Docker: both functions run as local processes, and a
 Crossplane binary is the render engine. Use three terminals, all in the
@@ -36,12 +39,12 @@ step's results.
 
 | XR | Mode | Policies on managed resources |
 |---|---|---|
-| `xr.yaml` | none (Full) | `["*"]` |
-| `xr-provision.yaml` | Provision | `[Observe, Create, Update, LateInitialize]` |
-| `xr-observe-only.yaml` | ObserveOnly | `[Observe]` |
-| `xr-deprovision.yaml` | Deprovision | `[Observe, Create, Delete]` |
-| `xr-invalid.yaml` | Orphan | fatal result, nothing rendered |
+| `xr.yaml` | Full, from the input's `mode` | `["*"]` |
+| `xr-provision.yaml` | Provision, from the annotation | `[Observe, Create, Update, LateInitialize]` |
+| `xr-observe-only.yaml` | ObserveOnly, from the annotation | `[Observe]` |
+| `xr-deprovision.yaml` | Deprovision, from the annotation | `[Observe, Create, Delete]` |
 | `xr-spec-mode.yaml` | ObserveOnly, from `spec.parameters.managementMode` via `modeRef` | `[Observe]` |
+| `xr-invalid.yaml` | Orphan | fatal result, nothing rendered |
 
 The annotation always wins. Without it, `modeRef` is read, then the input's
 `mode`, then `Full`.
@@ -57,3 +60,29 @@ crossplane composition render example/xr.yaml example/composition-environment.ya
 
 `--context-values` fakes what function-environment-configs would put in the
 context, so you can try this without a cluster.
+
+## Test every example
+
+With both functions running, render every example and check the output:
+
+```shell
+./example/test.sh
+```
+
+It prints `PASS` or `FAIL` for each example. It tests whatever is running on
+port 9443, so restart the function after you change its code.
+
+## Debugging
+
+* `--include-function-results` (`-r`) prints each step's results.
+* `--include-context` (`-c`) prints the pipeline context as `kind: Context`.
+* `--include-full-xr` (`-x`) adds the input XR's spec and metadata to the
+  rendered XR. The `LifecycleMode` condition is in its status either way.
+* `--debug` on the function logs each resource it changes or skips.
+
+For example:
+
+```shell
+crossplane composition render example/xr-observe-only.yaml example/composition.yaml \
+  example/functions.yaml -r -x --crossplane-binary=$(which crossplane-core)
+```

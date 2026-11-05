@@ -1,0 +1,62 @@
+# Composes a ConfigMap twice: once wrapped in a provider-kubernetes Object (a
+# managed resource) and once as a plain Kubernetes object.
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: apps.example.crossplane.io
+spec:
+  compositeTypeRef:
+    apiVersion: example.crossplane.io/v1
+    kind: App
+  mode: Pipeline
+  pipeline:
+  - step: compose
+    functionRef:
+      name: function-patch-and-transform
+    input:
+      apiVersion: pt.fn.crossplane.io/v1beta1
+      kind: Resources
+      resources:
+      - name: config
+        base:
+          apiVersion: kubernetes.m.crossplane.io/v1alpha1
+          kind: Object
+          spec:
+            forProvider:
+              manifest:
+                apiVersion: v1
+                kind: ConfigMap
+                data:
+                  owner: platform-team
+            providerConfigRef:
+              kind: ProviderConfig
+              name: kubernetes-provider
+        patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+          transforms:
+          - type: string
+            string:
+              type: Format
+              fmt: "%s-config"
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+      - name: settings
+        base:
+          apiVersion: v1
+          kind: ConfigMap
+          data:
+            tier: gold
+  - step: lifecycle
+    functionRef:
+      name: function-lifecycle
+    input:
+      apiVersion: lifecycle.fn.crossplane.io/v1beta1
+      kind: Input
+      mode: Full
+      modeRef: spec.parameters.managementMode
+  - step: auto-ready
+    functionRef:
+      name: function-auto-ready

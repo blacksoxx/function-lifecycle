@@ -1,0 +1,31 @@
+# A namespaced v2 XR. The managementMode parameter is used from Lab 3 on.
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: apps.example.crossplane.io
+spec:
+  group: example.crossplane.io
+  names:
+    kind: App
+    plural: apps
+  scope: Namespaced
+  versions:
+  - name: v1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              parameters:
+                type: object
+                properties:
+                  region:
+                    type: string
+                    default: us-east-2
+                  managementMode:
+                    type: string
+                    enum: [Full, Provision, ObserveOnly, Deprovision]

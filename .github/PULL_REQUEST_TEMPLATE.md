@@ -25,6 +25,7 @@ I have:
 
 - [ ] Read and followed Crossplane's [contribution process].
 - [ ] Added or updated unit tests for my change.
+- [ ] Ran the e2e test on a local cluster: `./e2e/run.sh`.
 
 [contribution process]: https://git.io/fj2m9
 [docs]: https://docs.crossplane.io/contribute/contribute

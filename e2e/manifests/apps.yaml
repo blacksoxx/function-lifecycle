@@ -1,0 +1,26 @@
+# Scenario 1 deletes provision. Scenario 2 freezes frozen, and not free.
+apiVersion: example.crossplane.io/v1
+kind: App
+metadata:
+  name: provision
+  namespace: default
+spec:
+  parameters: {}
+---
+apiVersion: example.crossplane.io/v1
+kind: App
+metadata:
+  name: frozen
+  namespace: default
+  labels:
+    freeze: "true"
+spec:
+  parameters: {}
+---
+apiVersion: example.crossplane.io/v1
+kind: App
+metadata:
+  name: free
+  namespace: default
+spec:
+  parameters: {}

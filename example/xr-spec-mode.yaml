@@ -1,0 +1,10 @@
+apiVersion: example.crossplane.io/v1
+kind: App
+metadata:
+  name: my-app
+  namespace: default
+spec:
+  parameters:
+    region: us-west-2
+    # Read by modeRef: spec.parameters.managementMode
+    managementMode: ObserveOnly

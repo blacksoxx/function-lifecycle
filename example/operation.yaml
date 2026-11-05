@@ -1,0 +1,26 @@
+# An Operation runs a function pipeline once, outside any Composition. This one
+# sets the mode annotation to ObserveOnly on every App labelled freeze: "true".
+# The composition step then applies ObserveOnly to each App's managed resources.
+apiVersion: ops.crossplane.io/v1alpha1
+kind: Operation
+metadata:
+  name: freeze-apps
+spec:
+  mode: Pipeline
+  pipeline:
+  - step: freeze
+    functionRef:
+      name: function-lifecycle
+    input:
+      apiVersion: lifecycle.fn.crossplane.io/v1beta1
+      kind: Input
+      # The mode to set. An Operation has no XR, so it can't use modeRef.
+      mode: ObserveOnly
+    # The resources Crossplane passes to the function, as required resources.
+    requirements:
+      requiredResources:
+      - requirementName: apps
+        apiVersion: example.crossplane.io/v1
+        kind: App
+        matchLabels:
+          freeze: "true"

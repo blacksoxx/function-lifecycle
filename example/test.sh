@@ -50,4 +50,17 @@ while IFS='|' read -r name xr comp context expect; do
   fi
   if [ $ok -eq 1 ]; then echo "PASS  $name"; else echo "FAIL  $name (see $out)"; fail=1; fi
 done <<<"$EXAMPLES"
+
+# The Operation sets the mode annotation on the two Apps in apps.yaml labelled
+# freeze: "true".
+out=/tmp/render-operation.out
+crossplane operation render operation.yaml functions.yaml -e apps.yaml -r --crossplane-binary="$ENGINE" >"$out" 2>&1
+rc=$?
+flat=$(tr -s ' \n' '  ' <"$out")
+if [[ $rc -eq 0 && $flat == *"Set lifecycle.fn.crossplane.io/mode to ObserveOnly on 2 resources"* ]]; then
+  echo "PASS  operation"
+else
+  echo "FAIL  operation (see $out)"
+  fail=1
+fi
 exit $fail

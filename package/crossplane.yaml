@@ -3,4 +3,25 @@ apiVersion: meta.pkg.crossplane.io/v1
 kind: Function
 metadata:
   name: function-lifecycle
+  annotations:
+    meta.crossplane.io/maintainer: Upbound <support@upbound.io>
+    meta.crossplane.io/source: github.com/upbound/function-lifecycle
+    meta.crossplane.io/license: Apache-2.0
+    meta.crossplane.io/description: A function that sets the lifecycle mode of composed managed resources, in Compositions and Operations.
+    meta.crossplane.io/readme: |
+      This composition function sets spec.managementPolicies on every composed
+      managed resource from one lifecycle mode: Full, Provision (never delete),
+      ObserveOnly, or Deprovision (delete without reconciling drift).
+
+      The mode comes from the XR's lifecycle.fn.crossplane.io/mode annotation,
+      from any XR spec or status field or pipeline context key via modeRef, or
+      from the function input. Use it to import existing infrastructure, freeze
+      changes during an incident, migrate between control planes, or delete an
+      XR without deleting its cloud resources.
+
+      In an Operation or CronOperation, it sets the mode annotation on every XR
+      the Operation selects, for example to freeze them all every weekend.
+# TODO(lab-05) 3: without capabilities, Crossplane treats a function as
+# composition-only, and an Operation won't run it. Replace {} with a
+# capabilities list that has composition and operation.
 spec: {}

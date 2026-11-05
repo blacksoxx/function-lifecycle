@@ -41,6 +41,10 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 	// steps into our response. We only change what we need to.
 	rsp := response.To(req, response.DefaultTTL)
 
+	// TODO(lab-05) 1: an Operation has no XR, so req.GetObserved().GetComposite()
+	// is nil. In that case, return f.runOperation(req, rsp), nil. runOperation
+	// is in operation.go.
+
 	xr, err := request.GetObservedCompositeResource(req)
 	if err != nil {
 		response.Fatal(rsp, errors.Wrap(err, "cannot get observed composite resource"))

@@ -1,0 +1,27 @@
+# The same Operation on a schedule: freeze every App labelled freeze: "true" at
+# 17:00 every Friday. A second CronOperation with mode: Full and a Monday
+# schedule, such as "0 8 * * 1", thaws them.
+apiVersion: ops.crossplane.io/v1alpha1
+kind: CronOperation
+metadata:
+  name: weekend-freeze
+spec:
+  schedule: "0 17 * * 5"
+  operationTemplate:
+    spec:
+      mode: Pipeline
+      pipeline:
+      - step: freeze
+        functionRef:
+          name: function-lifecycle
+        input:
+          apiVersion: lifecycle.fn.crossplane.io/v1beta1
+          kind: Input
+          mode: ObserveOnly
+        requirements:
+          requiredResources:
+          - requirementName: apps
+            apiVersion: example.crossplane.io/v1
+            kind: App
+            matchLabels:
+              freeze: "true"

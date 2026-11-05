@@ -158,18 +158,19 @@ spec:
 | `go generate ./...` | Generates the input CRD. See `input/generate.go`. |
 | `go test ./...` | Runs the unit tests in `fn_test.go` and `operation_test.go`. |
 | `./example/test.sh` | Renders every example and reports PASS/FAIL. |
-| `./e2e/run.sh` | Builds the function from your working tree and tests it on a local kind cluster. |
+| `./e2e/cluster.sh` | Creates a local kind cluster for the e2e test. Run it once. |
+| `./e2e/run.sh` | Builds the function from your working tree, installs it on that cluster, and runs the e2e test. |
 
 `./example/test.sh` doesn't need Docker. It renders against the function and
 function-patch-and-transform running as local processes, with a Crossplane
 binary as the render engine. [example/README.md](example/README.md) shows how
 to start them.
 
-`./e2e/run.sh` needs Docker, kind, kubectl, and helm. It creates a kind cluster
-with Crossplane (Operations enabled) and provider-kubernetes, installs your
-build, and checks two things render can't: that deleting a Provision XR leaves
-its resources behind, and that an Operation freezes the XRs it selects. See
-[e2e/run.sh](e2e/run.sh).
+The e2e test needs Docker, kind, kubectl, and helm. `./e2e/cluster.sh` creates
+a kind cluster with Crossplane (Operations enabled), provider-kubernetes, and a
+local registry. `./e2e/run.sh` builds your function, installs it from that
+registry, and checks two things render can't: that deleting a Provision XR
+leaves its resources behind, and that an Operation freezes the XRs it selects.
 
 Building the runtime image and the package needs Docker with BuildKit:
 

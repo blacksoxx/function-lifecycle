@@ -1,0 +1,31 @@
+# This repository's function, built from your working tree. Replace FN_PACKAGE
+# with the package in the local registry, and FN_IMAGE with the image you
+# loaded into kind. Lab 6 and run.sh do it with sed.
+apiVersion: pkg.crossplane.io/v1
+kind: Function
+metadata:
+  name: function-lifecycle
+spec:
+  package: FN_PACKAGE
+  runtimeConfigRef:
+    apiVersion: pkg.crossplane.io/v1beta1
+    kind: DeploymentRuntimeConfig
+    name: function-lifecycle-e2e
+---
+# Crossplane pulls the package from the local registry. The function's
+# container runs the image you loaded into kind, so kind needs no registry
+# configuration.
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: function-lifecycle-e2e
+spec:
+  deploymentTemplate:
+    spec:
+      selector: {}
+      template:
+        spec:
+          containers:
+          - name: package-runtime
+            image: FN_IMAGE
+            imagePullPolicy: IfNotPresent

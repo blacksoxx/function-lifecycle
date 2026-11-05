@@ -1,28 +1,27 @@
 #!/usr/bin/env bash
-# Tests the function end to end on a local kind cluster: Crossplane with
-# Operations enabled, provider-kubernetes, and this function built from your
-# working tree. Run it from the repository root:
+# The e2e test. It builds the function from your working tree, installs it on
+# the control plane ./e2e/cluster.sh created, and checks two things render
+# can't: deleting a Provision XR leaves its resources behind, and an Operation
+# freezes only the XRs it selects. Run it from the repository root:
 #
-#   ./e2e/run.sh
+#   ./e2e/cluster.sh   # once
+#   ./e2e/run.sh       # after every change
 #
-# The first run takes a few minutes, most of it pulling images. Later runs reuse
-# the cluster and only rebuild the function. The cluster stays up so you can
-# look around. To delete it:
-#
-#   kind delete cluster --name lifecycle-e2e && docker rm -f lifecycle-e2e-registry
+# The cluster stays up, so you can look around afterwards.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-CLUSTER=lifecycle-e2e
-REGISTRY=$CLUSTER-registry
-CROSSPLANE_VERSION=2.4.3
+CLUSTER=${CLUSTER:-lifecycle-e2e}
+REGISTRY_PORT=${REGISTRY_PORT:-5001}
 TAG=e2e-$(date +%s)
 BUILD=$(mktemp -d)
 trap 'rm -rf "$BUILD"' EXIT
 
-for tool in docker kind kubectl helm crossplane go; do
+for tool in docker kind kubectl crossplane go; do
   command -v "$tool" >/dev/null || { echo "$tool isn't on your PATH."; exit 1; }
 done
+kind get clusters 2>/dev/null | grep -qx "$CLUSTER" || { echo "There's no $CLUSTER cluster. Run ./e2e/cluster.sh first."; exit 1; }
+kind export kubeconfig --name "$CLUSTER" >/dev/null
 
 step() { printf '\n==> %s\n' "$*"; }
 
@@ -50,44 +49,25 @@ policies() {
     -o jsonpath='{.items[0].spec.managementPolicies}'
 }
 
-step "Cluster $CLUSTER"
-kind get clusters 2>/dev/null | grep -qx "$CLUSTER" || kind create cluster --name "$CLUSTER" --wait 2m
-kind export kubeconfig --name "$CLUSTER" >/dev/null
-
-step "Local registry"
-if ! docker inspect "$REGISTRY" >/dev/null 2>&1; then
-  docker run -d --name "$REGISTRY" --network kind -p 127.0.0.1:5001:5000 registry:2 >/dev/null
-fi
-# Crossplane reaches the registry at its IP on kind's network. A registry at a
-# private IP address is plain HTTP, so there's no TLS to set up.
-REGISTRY_IP=$(docker inspect -f '{{(index .NetworkSettings.Networks "kind").IPAddress}}' "$REGISTRY")
-
-step "Crossplane $CROSSPLANE_VERSION, with Operations enabled"
-helm repo add crossplane-stable https://charts.crossplane.io/stable --force-update >/dev/null
-helm upgrade --install crossplane crossplane-stable/crossplane --version "$CROSSPLANE_VERSION" \
-  --namespace crossplane-system --create-namespace --set 'args={--enable-operations}' --wait >/dev/null
-
-step "Build the function from your working tree"
-# A plain go build and a two-line image work with any Docker, BuildKit or not.
-ARCH=$(docker version --format '{{.Server.Arch}}')
-CGO_ENABLED=0 GOOS=linux GOARCH=$ARCH go build -o "$BUILD/function" .
-printf 'FROM gcr.io/distroless/static-debian12:nonroot\nCOPY function /function\nUSER nonroot:nonroot\nENTRYPOINT ["/function"]\n' >"$BUILD/Dockerfile"
+step "Build function-lifecycle:$TAG from your working tree, and load it into kind"
+CGO_ENABLED=0 GOOS=linux GOARCH=$(docker version --format '{{.Server.Arch}}') go build -o "$BUILD/function" .
+cp e2e/Dockerfile "$BUILD/"
 docker build -q -t "function-lifecycle:$TAG" "$BUILD" >/dev/null
 kind load docker-image "function-lifecycle:$TAG" --name "$CLUSTER" >/dev/null
-crossplane xpkg build -f package -o "$BUILD/function.xpkg" >/dev/null
-crossplane xpkg push -f "$BUILD/function.xpkg" "localhost:5001/function-lifecycle:$TAG" >/dev/null
-PACKAGE=$REGISTRY_IP:5000/function-lifecycle:$TAG
 
-step "Provider, functions, and the App API"
-kubectl apply -f e2e/manifests/provider.yaml >/dev/null
-sed -e "s#FN_PACKAGE#$PACKAGE#" -e "s#FN_IMAGE#function-lifecycle:$TAG#" e2e/manifests/functions.yaml | kubectl apply -f - >/dev/null
+step "Build the package, and push it to the local registry"
+crossplane xpkg build -f package -o "$BUILD/function.xpkg" >/dev/null
+crossplane xpkg push -f "$BUILD/function.xpkg" "localhost:$REGISTRY_PORT/function-lifecycle:$TAG" >/dev/null
+
+step "Install it"
+# Crossplane reaches the registry at its IP on kind's network. A registry at a
+# private IP address is plain HTTP, so there's no TLS to set up.
+REGISTRY=$(docker inspect -f '{{(index .NetworkSettings.Networks "kind").IPAddress}}' "$CLUSTER-registry"):5000
+PACKAGE=$REGISTRY/function-lifecycle:$TAG
+sed -e "s#FN_PACKAGE#$PACKAGE#" -e "s#FN_IMAGE#function-lifecycle:$TAG#" e2e/manifests/function-lifecycle.yaml | kubectl apply -f - >/dev/null
 wait_for 300 is kubectl get functions.pkg.crossplane.io function-lifecycle -o jsonpath='{.status.currentIdentifier}' "$PACKAGE" ||
   { echo "Crossplane didn't install your build within 5 minutes: kubectl describe functions.pkg.crossplane.io function-lifecycle"; exit 1; }
-kubectl wait providers.pkg.crossplane.io --all --for condition=Healthy --timeout 5m >/dev/null
-kubectl wait functions.pkg.crossplane.io --all --for condition=Healthy --timeout 5m >/dev/null
-kubectl apply -f e2e/manifests/providerconfig.yaml -f e2e/manifests/definition.yaml >/dev/null
-kubectl wait xrd apps.example.crossplane.io --for condition=Established --timeout 2m >/dev/null
-kubectl apply -f e2e/manifests/composition.yaml >/dev/null
+kubectl wait functions.pkg.crossplane.io function-lifecycle --for condition=Healthy --timeout 5m >/dev/null
 
 step "Fresh Apps"
 kubectl delete operations.ops.crossplane.io freeze-apps --ignore-not-found >/dev/null

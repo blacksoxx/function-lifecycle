@@ -4,6 +4,8 @@ metadata:
   name: freeze-apps
 spec:
   mode: Pipeline
+  # Give up after one failure, so a broken function fails the test fast.
+  retryLimit: 1
   pipeline:
   - step: freeze
     functionRef:

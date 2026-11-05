@@ -11,4 +11,16 @@ metadata:
     render.crossplane.io/runtime-development-target: 127.0.0.1:9443
 spec:
   # This is ignored when using the Development runtime.
-  package: function-lifecycle
+  package: ghcr.io/upbound/function-lifecycle:v0.1.0
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Function
+metadata:
+  name: function-patch-and-transform
+  annotations:
+    # Run this one locally too, so render doesn't need Docker:
+    # function-patch-and-transform --insecure --address=127.0.0.1:9444
+    render.crossplane.io/runtime: Development
+    render.crossplane.io/runtime-development-target: 127.0.0.1:9444
+spec:
+  package: xpkg.crossplane.io/crossplane-contrib/function-patch-and-transform:v0.11.2

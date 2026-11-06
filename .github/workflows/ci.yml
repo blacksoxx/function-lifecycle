@@ -12,6 +12,11 @@ on:
         description: Package version (e.g. v0.1.0)
         required: false
 
+# Read-only by default. Only the push job, which never runs for pull requests,
+# can write packages.
+permissions:
+  contents: read
+
 env:
   # Common versions
   GO_VERSION: '1.26.0'
@@ -123,6 +128,9 @@ jobs:
   push:
     if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      packages: write
     needs:
       - build
     steps:
@@ -132,7 +140,8 @@ jobs:
       - name: Download Single-Platform Packages
         uses: actions/download-artifact@v8
         with:
-          # See https://github.com/docker/build-push-action/blob/263435/README.md#summaries
+          # Skip the build record artifacts. See
+          # https://docs.docker.com/build/ci/github-actions/build-summary/
           pattern: "!*.dockerbuild"
           path: .
           merge-multiple: true

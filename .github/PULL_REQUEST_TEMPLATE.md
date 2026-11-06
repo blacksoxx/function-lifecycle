@@ -2,7 +2,7 @@
 Thank you for helping to improve Crossplane!
 
 Please read through https://git.io/fj2m9 if this is your first time opening a
-Crossplane pull request. Find us in https://slack.crossplane.io/messages/dev if
+Crossplane pull request. Find us in https://slack.crossplane.io if
 you need any help contributing.
 -->
 

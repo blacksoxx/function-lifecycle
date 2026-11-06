@@ -70,7 +70,7 @@ wait_for 300 is kubectl get functions.pkg.crossplane.io function-lifecycle -o js
 kubectl wait functions.pkg.crossplane.io function-lifecycle --for condition=Healthy --timeout 5m >/dev/null
 
 step "Fresh Apps"
-kubectl delete operations.ops.crossplane.io freeze-apps --ignore-not-found >/dev/null
+kubectl delete operations.ops.crossplane.io e2e-freeze-apps --ignore-not-found >/dev/null
 kubectl delete -f e2e/manifests/apps.yaml --ignore-not-found --wait >/dev/null
 kubectl delete configmap -n default provision-config frozen-config free-config --ignore-not-found >/dev/null
 kubectl apply -f e2e/manifests/apps.yaml >/dev/null
@@ -99,8 +99,8 @@ check 30 "the ConfigMap outlives the App" kubectl get configmap provision-config
 step "Scenario 2: an Operation freezes the Apps labelled freeze: \"true\"."
 kubectl apply -f e2e/manifests/operation.yaml >/dev/null
 # An Operation retries a failed pipeline, then gives up. Wait for either.
-succeeded() { kubectl get operations.ops.crossplane.io freeze-apps -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].status}'; }
-finished() { [[ $(succeeded) == True ]] || kubectl get operations.ops.crossplane.io freeze-apps -o yaml | grep -q 'failure limit'; }
+succeeded() { kubectl get operations.ops.crossplane.io e2e-freeze-apps -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].status}'; }
+finished() { [[ $(succeeded) == True ]] || kubectl get operations.ops.crossplane.io e2e-freeze-apps -o yaml | grep -q 'failure limit'; }
 wait_for 180 finished
 if [[ $(succeeded) == True ]]; then
   echo "PASS  the Operation succeeds"
@@ -110,7 +110,7 @@ if [[ $(succeeded) == True ]]; then
 else
   echo "FAIL  the Operation succeeds"
   fail=1
-  kubectl get operations.ops.crossplane.io freeze-apps \
+  kubectl get operations.ops.crossplane.io e2e-freeze-apps \
     -o jsonpath='{range .status.conditions[?(@.message)]}{"      "}{.type}: {.message}{"\n"}{end}'
 fi
 check 5 "the other App keeps Full" is policies free '["*"]'

@@ -444,6 +444,69 @@ func TestRunFunction(t *testing.T) {
 				},
 			},
 		},
+		"RespectExistingKeepsEarlierPolicies": {
+			reason: "With respectExisting the Function should keep policies an earlier step set and still apply the mode to the other managed resources",
+			args: args{
+				req: &fnv1.RunFunctionRequest{
+					Observed: xr("Provision"),
+					Input:    input(`"respectExisting":true`),
+					Desired:  desired(map[string]string{"bucket": bucketWith(`["Observe"]`), "other": bucket, "settings": configMap}),
+				},
+			},
+			want: want{
+				rsp: &fnv1.RunFunctionResponse{
+					Meta:    &fnv1.ResponseMeta{Ttl: durationpb.New(response.DefaultTTL)},
+					Desired: desired(map[string]string{"bucket": bucketWith(`["Observe"]`), "other": bucketWith(`["Observe","Create","Update","LateInitialize"]`), "settings": configMap}),
+					Results: []*fnv1.Result{
+						{
+							Severity: fnv1.Severity_SEVERITY_NORMAL,
+							Message:  "Provision (from annotation lifecycle.fn.crossplane.io/mode): set managementPolicies [Observe Create Update LateInitialize] on 1 managed resources (1 kept, 1 skipped)",
+							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+					Conditions: []*fnv1.Condition{
+						{
+							Type:    "LifecycleMode",
+							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
+							Reason:  "Provision",
+							Message: new("Composed managed resources use managementPolicies [Observe Create Update LateInitialize] (mode from annotation lifecycle.fn.crossplane.io/mode)"),
+							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+				},
+			},
+		},
+		"ExistingPoliciesOverwrittenByDefault": {
+			reason: "Without respectExisting the Function should overwrite policies an earlier step set",
+			args: args{
+				req: &fnv1.RunFunctionRequest{
+					Observed: xr("Provision"),
+					Desired:  desired(map[string]string{"bucket": bucketWith(`["Observe"]`), "settings": configMap}),
+				},
+			},
+			want: want{
+				rsp: &fnv1.RunFunctionResponse{
+					Meta:    &fnv1.ResponseMeta{Ttl: durationpb.New(response.DefaultTTL)},
+					Desired: desired(map[string]string{"bucket": bucketWith(`["Observe","Create","Update","LateInitialize"]`), "settings": configMap}),
+					Results: []*fnv1.Result{
+						{
+							Severity: fnv1.Severity_SEVERITY_NORMAL,
+							Message:  "Provision (from annotation lifecycle.fn.crossplane.io/mode): set managementPolicies [Observe Create Update LateInitialize] on 1 managed resources (1 skipped)",
+							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+					Conditions: []*fnv1.Condition{
+						{
+							Type:    "LifecycleMode",
+							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
+							Reason:  "Provision",
+							Message: new("Composed managed resources use managementPolicies [Observe Create Update LateInitialize] (mode from annotation lifecycle.fn.crossplane.io/mode)"),
+							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+				},
+			},
+		},
 		"NoDesiredResources": {
 			reason: "The Function should succeed when previous steps produced no composed resources",
 			args: args{

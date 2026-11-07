@@ -45,6 +45,7 @@ spec:
       kind: Input
       mode: Full                               # Optional. Defaults to Full.
       modeRef: spec.parameters.managementMode  # Optional.
+      respectExisting: false                   # Optional. Keep policies an earlier step set.
 ```
 
 The function picks the mode from the first of these that's set:
@@ -105,7 +106,10 @@ kubectl delete app my-app
 
 * It only changes desired resources that have `spec.forProvider`, which every
   MR has. Plain Kubernetes objects and nested XRs are skipped.
-* It overwrites `spec.managementPolicies` set by earlier pipeline steps.
+* It overwrites `spec.managementPolicies` set by earlier pipeline steps,
+  unless the input sets `respectExisting: true`. Then a resource that already
+  has `spec.managementPolicies` keeps it, and the result says how many
+  resources did.
 * The provider must support management policies. They're on by default in the
   upjet providers and provider-kubernetes, and off by default in the classic
   crossplane-contrib/provider-aws.

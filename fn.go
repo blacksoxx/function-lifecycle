@@ -82,11 +82,16 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 		return rsp, nil
 	}
 
-	var applied, skipped int
+	var applied, kept, skipped int
 	for name, dr := range desired {
 		if !isManaged(dr) {
 			f.log.Debug("Skipping composed resource that is not a managed resource", "resource", name)
 			skipped++
+			continue
+		}
+		if in.RespectExisting && hasPolicies(dr) {
+			f.log.Debug("Keeping management policies set by an earlier step", "resource", name)
+			kept++
 			continue
 		}
 		if err := dr.Resource.SetValue("spec.managementPolicies", policies); err != nil {
@@ -104,7 +109,11 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 
 	// Results become events on the XR. Conditions stay on the XR's status, so
 	// kubectl get and crossplane beta trace show the active mode.
-	response.Normalf(rsp, "%s (from %s): set managementPolicies %v on %d managed resources (%d skipped)", mode, source, policies, applied, skipped)
+	if in.RespectExisting {
+		response.Normalf(rsp, "%s (from %s): set managementPolicies %v on %d managed resources (%d kept, %d skipped)", mode, source, policies, applied, kept, skipped)
+	} else {
+		response.Normalf(rsp, "%s (from %s): set managementPolicies %v on %d managed resources (%d skipped)", mode, source, policies, applied, skipped)
+	}
 	response.ConditionTrue(rsp, ConditionTypeLifecycleMode, string(mode)).
 		WithMessage(fmt.Sprintf("Composed managed resources use managementPolicies %v (mode from %s)", policies, source)).
 		TargetComposite()
@@ -158,5 +167,12 @@ func lookup(req *fnv1.RunFunctionRequest, xr *resource.Composite, ref string) (s
 // objects and nested XRs don't.
 func isManaged(dr *resource.DesiredComposed) bool {
 	_, err := dr.Resource.GetValue("spec.forProvider")
+	return err == nil
+}
+
+// hasPolicies returns true if an earlier pipeline step already set
+// spec.managementPolicies on the composed resource.
+func hasPolicies(dr *resource.DesiredComposed) bool {
+	_, err := dr.Resource.GetValue("spec.managementPolicies")
 	return err == nil
 }

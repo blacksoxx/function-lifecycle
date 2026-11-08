@@ -148,6 +148,8 @@ spec:
 
 * In an Operation the input's `mode` is required. There's no XR to read a mode
   from, so `modeRef` isn't used.
+* The step's output in the Operation's `status.pipeline[].output` lists the
+  mode and the resources it annotated.
 * A second CronOperation with `mode: Full` and a Monday schedule thaws the XRs.
 * Operations are alpha. Start Crossplane with `--enable-operations`.
 

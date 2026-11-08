@@ -44,7 +44,7 @@ func TestRunOperation(t *testing.T) {
 		want   want
 	}{
 		"SetsModeAnnotation": {
-			reason: "In an Operation the Function should set the mode annotation on every required resource, and nothing else",
+			reason: "In an Operation the Function should set the mode annotation on every required resource, report them in its output, and change nothing else",
 			args: args{
 				req: &fnv1.RunFunctionRequest{
 					Input: input(`"mode":"ObserveOnly"`),
@@ -67,6 +67,7 @@ func TestRunOperation(t *testing.T) {
 							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
+					Output: resource.MustStructJSON(`{"mode":"ObserveOnly","resources":["default/checkout","default/payments"]}`),
 				},
 			},
 		},
@@ -88,6 +89,7 @@ func TestRunOperation(t *testing.T) {
 							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
+					Output: resource.MustStructJSON(`{"mode":"Full","resources":[]}`),
 				},
 			},
 		},

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"sort"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/crossplane/function-sdk-go/errors"
@@ -11,6 +13,13 @@ import (
 
 	"github.com/crossplane/function-lifecycle/input/v1beta1"
 )
+
+// operationOutput is what the function reports in the Operation's
+// status.pipeline[].output: the mode it set and the resources it set it on.
+type operationOutput struct {
+	Mode      string   `json:"mode"`
+	Resources []string `json:"resources"`
+}
 
 // runOperation runs the function as a step of an Operation, CronOperation, or
 // WatchOperation. There's no XR there. Instead it sets the mode annotation on
@@ -57,6 +66,16 @@ func (f *Function) runOperation(req *fnv1.RunFunctionRequest, rsp *fnv1.RunFunct
 
 	if err := response.SetDesiredResources(rsp, desired); err != nil {
 		response.Fatal(rsp, errors.Wrap(err, "cannot set desired resources"))
+		return rsp
+	}
+
+	out := operationOutput{Mode: string(mode), Resources: make([]string, 0, len(desired))}
+	for name := range desired {
+		out.Resources = append(out.Resources, string(name))
+	}
+	sort.Strings(out.Resources)
+	if err := response.SetOutput(rsp, out); err != nil {
+		response.Fatal(rsp, errors.Wrap(err, "cannot set output"))
 		return rsp
 	}
 

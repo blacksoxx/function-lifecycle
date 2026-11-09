@@ -32,4 +32,9 @@ type Input struct {
 	// context.[apiextensions.crossplane.io/environment].managementMode.
 	// +optional
 	ModeRef string `json:"modeRef,omitempty"`
+
+	// Debug writes what the function decided for each composed resource to
+	// the pipeline context, under lifecycle.fn.crossplane.io/decisions.
+	// +optional
+	Debug bool `json:"debug,omitempty"`
 }

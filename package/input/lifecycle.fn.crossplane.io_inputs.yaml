@@ -30,6 +30,11 @@ spec:
               may reject unrecognized values.
               More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
+          debug:
+            description: |-
+              Debug writes what the function decided for each composed resource to
+              the pipeline context, under lifecycle.fn.crossplane.io/decisions.
+            type: boolean
           kind:
             description: |-
               Kind is a string value representing the REST resource this object represents.

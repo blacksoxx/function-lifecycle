@@ -45,6 +45,7 @@ spec:
       kind: Input
       mode: Full                               # Optional. Defaults to Full.
       modeRef: spec.parameters.managementMode  # Optional.
+      debug: false                             # Optional. Records each decision in the context.
 ```
 
 The function picks the mode from the first of these that's set:
@@ -60,6 +61,17 @@ The function picks the mode from the first of these that's set:
 
 An unknown mode is a fatal error. The function never falls back to `Full` when
 a mode is misspelled.
+
+With `debug: true` the function writes what it decided for each composed
+resource to the pipeline context, under `lifecycle.fn.crossplane.io/decisions`:
+
+```yaml
+bucket: ["Observe"]
+settings: "skipped: not a managed resource"
+```
+
+Later pipeline steps can read it, and `crossplane composition render -c` prints
+it as a `Context` resource.
 
 The function reports the active mode in an event and in the XR's
 `LifecycleMode` condition:

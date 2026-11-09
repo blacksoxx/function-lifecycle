@@ -444,6 +444,73 @@ func TestRunFunction(t *testing.T) {
 				},
 			},
 		},
+		"DebugWritesDecisionsToContext": {
+			reason: "With debug set the Function should record its decision for each composed resource in the context",
+			args: args{
+				req: &fnv1.RunFunctionRequest{
+					Observed: xr("ObserveOnly"),
+					Input:    input(`"debug":true`),
+					Desired:  desired(map[string]string{"bucket": bucket, "settings": configMap}),
+				},
+			},
+			want: want{
+				rsp: &fnv1.RunFunctionResponse{
+					Meta:    &fnv1.ResponseMeta{Ttl: durationpb.New(response.DefaultTTL)},
+					Desired: desired(map[string]string{"bucket": bucketWith(`["Observe"]`), "settings": configMap}),
+					Context: resource.MustStructJSON(`{"lifecycle.fn.crossplane.io/decisions":{"bucket":["Observe"],"settings":"skipped: not a managed resource"}}`),
+					Results: []*fnv1.Result{
+						{
+							Severity: fnv1.Severity_SEVERITY_NORMAL,
+							Message:  "ObserveOnly (from annotation lifecycle.fn.crossplane.io/mode): set managementPolicies [Observe] on 1 managed resources (1 skipped)",
+							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+					Conditions: []*fnv1.Condition{
+						{
+							Type:    "LifecycleMode",
+							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
+							Reason:  "ObserveOnly",
+							Message: new("Composed managed resources use managementPolicies [Observe] (mode from annotation lifecycle.fn.crossplane.io/mode)"),
+							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+				},
+			},
+		},
+		"DebugKeepsExistingContext": {
+			reason: "The decisions should be added to the context earlier steps built, not replace it",
+			args: args{
+				req: &fnv1.RunFunctionRequest{
+					Observed: xr(""),
+					Input:    input(`"debug":true`),
+					Context:  resource.MustStructJSON(`{"apiextensions.crossplane.io/environment":{"region":"eu-west-1"}}`),
+					Desired:  desired(map[string]string{"bucket": bucket}),
+				},
+			},
+			want: want{
+				rsp: &fnv1.RunFunctionResponse{
+					Meta:    &fnv1.ResponseMeta{Ttl: durationpb.New(response.DefaultTTL)},
+					Desired: desired(map[string]string{"bucket": bucketWith(`["*"]`)}),
+					Context: resource.MustStructJSON(`{"apiextensions.crossplane.io/environment":{"region":"eu-west-1"},"lifecycle.fn.crossplane.io/decisions":{"bucket":["*"]}}`),
+					Results: []*fnv1.Result{
+						{
+							Severity: fnv1.Severity_SEVERITY_NORMAL,
+							Message:  "Full (from default): set managementPolicies [*] on 1 managed resources (0 skipped)",
+							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+					Conditions: []*fnv1.Condition{
+						{
+							Type:    "LifecycleMode",
+							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
+							Reason:  "Full",
+							Message: new("Composed managed resources use managementPolicies [*] (mode from default)"),
+							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+				},
+			},
+		},
 		"NoDesiredResources": {
 			reason: "The Function should succeed when previous steps produced no composed resources",
 			args: args{

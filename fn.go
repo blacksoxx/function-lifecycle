@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/crossplane/function-sdk-go/errors"
 	"github.com/crossplane/function-sdk-go/logging"
@@ -24,6 +25,10 @@ const (
 
 	// ConditionTypeLifecycleMode reports the active mode on the XR.
 	ConditionTypeLifecycleMode = "LifecycleMode"
+
+	// ContextKeyDecisions is where the function records what it decided for
+	// each composed resource when the input's debug is true.
+	ContextKeyDecisions = "lifecycle.fn.crossplane.io/decisions"
 )
 
 // Function sets spec.managementPolicies on composed managed resources.
@@ -83,9 +88,11 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 	}
 
 	var applied, skipped int
+	decisions := map[string]any{}
 	for name, dr := range desired {
 		if !isManaged(dr) {
 			f.log.Debug("Skipping composed resource that is not a managed resource", "resource", name)
+			decisions[string(name)] = "skipped: not a managed resource"
 			skipped++
 			continue
 		}
@@ -94,7 +101,15 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 			return rsp, nil
 		}
 		f.log.Debug("Set management policies", "resource", name, "policies", policies)
+		decisions[string(name)] = policies
 		applied++
+	}
+
+	if in.Debug {
+		if err := setDecisions(rsp, decisions); err != nil {
+			response.Fatal(rsp, err)
+			return rsp, nil
+		}
 	}
 
 	if err := response.SetDesiredComposedResources(rsp, desired); err != nil {
@@ -151,6 +166,27 @@ func lookup(req *fnv1.RunFunctionRequest, xr *resource.Composite, ref string) (s
 		return "", nil
 	}
 	return v, errors.Wrapf(err, "cannot resolve modeRef %q", ref)
+}
+
+// setDecisions writes the decision for each composed resource to the pipeline
+// context, so later steps and crossplane composition render -c can see it.
+// Policies arrive as []string, which structpb only accepts as []any.
+func setDecisions(rsp *fnv1.RunFunctionResponse, decisions map[string]any) error {
+	for name, d := range decisions {
+		if policies, ok := d.([]string); ok {
+			actions := make([]any, len(policies))
+			for i, p := range policies {
+				actions[i] = p
+			}
+			decisions[name] = actions
+		}
+	}
+	v, err := structpb.NewValue(decisions)
+	if err != nil {
+		return errors.Wrap(err, "cannot convert decisions to a context value")
+	}
+	response.SetContextKey(rsp, ContextKeyDecisions, v)
+	return nil
 }
 
 // isManaged returns true if the composed resource looks like a managed

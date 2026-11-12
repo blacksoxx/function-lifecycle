@@ -81,9 +81,20 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 		response.Fatal(rsp, errors.Wrap(err, "cannot get desired composed resources"))
 		return rsp, nil
 	}
+	observed, err := request.GetObservedComposedResources(req)
+	if err != nil {
+		response.Fatal(rsp, errors.Wrap(err, "cannot get observed composed resources"))
+		return rsp, nil
+	}
 
-	var applied, skipped int
+	var applied, skipped, nested int
 	for name, dr := range desired {
+		if isComposite(dr, observed[name]) {
+			annotateMode(dr, mode)
+			f.log.Debug("Set the mode annotation on a nested composite resource", "resource", name, "mode", mode)
+			nested++
+			continue
+		}
 		if !isManaged(dr) {
 			f.log.Debug("Skipping composed resource that is not a managed resource", "resource", name)
 			skipped++
@@ -104,7 +115,11 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 
 	// Results become events on the XR. Conditions stay on the XR's status, so
 	// kubectl get and crossplane beta trace show the active mode.
-	response.Normalf(rsp, "%s (from %s): set managementPolicies %v on %d managed resources (%d skipped)", mode, source, policies, applied, skipped)
+	msg := fmt.Sprintf("%s (from %s): set managementPolicies %v on %d managed resources (%d skipped)", mode, source, policies, applied, skipped)
+	if nested > 0 {
+		msg += fmt.Sprintf(", mode annotation on %d nested XRs", nested)
+	}
+	response.Normal(rsp, msg)
 	response.ConditionTrue(rsp, ConditionTypeLifecycleMode, string(mode)).
 		WithMessage(fmt.Sprintf("Composed managed resources use managementPolicies %v (mode from %s)", policies, source)).
 		TargetComposite()
@@ -159,4 +174,30 @@ func lookup(req *fnv1.RunFunctionRequest, xr *resource.Composite, ref string) (s
 func isManaged(dr *resource.DesiredComposed) bool {
 	_, err := dr.Resource.GetValue("spec.forProvider")
 	return err == nil
+}
+
+// isComposite returns true if the composed resource is itself a composite
+// resource. Crossplane keeps its own fields of a v2 XR under spec.crossplane:
+// on the desired resource when the composition sets them, and on the observed
+// resource once Crossplane has reconciled it.
+func isComposite(dr *resource.DesiredComposed, oc resource.ObservedComposed) bool {
+	if _, err := dr.Resource.GetValue("spec.crossplane"); err == nil {
+		return true
+	}
+	if oc.Resource == nil {
+		return false
+	}
+	_, err := oc.Resource.GetValue("spec.crossplane")
+	return err == nil
+}
+
+// annotateMode sets the mode annotation on a nested composite resource, so
+// that its own composition's function-lifecycle step applies the same mode.
+func annotateMode(dr *resource.DesiredComposed, mode Mode) {
+	a := dr.Resource.GetAnnotations()
+	if a == nil {
+		a = map[string]string{}
+	}
+	a[AnnotationMode] = string(mode)
+	dr.Resource.SetAnnotations(a)
 }

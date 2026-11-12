@@ -22,6 +22,28 @@ const bucket = `{"apiVersion":"s3.aws.m.upbound.io/v1beta1","kind":"Bucket","spe
 // A composed resource that isn't a managed resource.
 const configMap = `{"apiVersion":"v1","kind":"ConfigMap","data":{"key":"value"}}`
 
+// A composed resource that is itself an XR. The composition pins its
+// composition under spec.crossplane, the block Crossplane keeps its own fields
+// in, and sets an annotation of its own.
+const nestedXR = `{"apiVersion":"example.crossplane.io/v1","kind":"Database","metadata":{"name":"my-db","annotations":{"example.org/owner":"team-a"}},"spec":{"crossplane":{"compositionSelector":{"matchLabels":{"tier":"db"}}},"parameters":{"size":"small"}}}`
+
+// nestedXRWith returns the nested XR with the supplied mode annotation added.
+func nestedXRWith(mode string) string {
+	return `{"apiVersion":"example.crossplane.io/v1","kind":"Database","metadata":{"name":"my-db","annotations":{"example.org/owner":"team-a","lifecycle.fn.crossplane.io/mode":"` + mode + `"}},"spec":{"crossplane":{"compositionSelector":{"matchLabels":{"tier":"db"}}},"parameters":{"size":"small"}}}`
+}
+
+// The same XR as a composition that doesn't set spec.crossplane writes it,
+// and as Crossplane observes it once it exists.
+const (
+	nestedXRTemplate = `{"apiVersion":"example.crossplane.io/v1","kind":"Database","metadata":{"name":"my-db"},"spec":{"parameters":{"size":"small"}}}`
+	nestedXRObserved = `{"apiVersion":"example.crossplane.io/v1","kind":"Database","metadata":{"name":"my-db","namespace":"default"},"spec":{"crossplane":{"compositionRef":{"name":"databases.example.crossplane.io"},"compositionUpdatePolicy":"Automatic"},"parameters":{"size":"small"}}}`
+)
+
+// nestedXRTemplateWith returns the template with the supplied mode annotation.
+func nestedXRTemplateWith(mode string) string {
+	return `{"apiVersion":"example.crossplane.io/v1","kind":"Database","metadata":{"name":"my-db","annotations":{"lifecycle.fn.crossplane.io/mode":"` + mode + `"}},"spec":{"parameters":{"size":"small"}}}`
+}
+
 // bucketWith returns the bucket with the supplied JSON management policies.
 func bucketWith(policies string) string {
 	return `{"apiVersion":"s3.aws.m.upbound.io/v1beta1","kind":"Bucket","spec":{"forProvider":{"region":"us-east-2"},"managementPolicies":` + policies + `}}`
@@ -439,6 +461,71 @@ func TestRunFunction(t *testing.T) {
 							Severity: fnv1.Severity_SEVERITY_FATAL,
 							Message:  `invalid mode from annotation lifecycle.fn.crossplane.io/mode: unknown mode "Orphan": must be one of Full, Provision, ObserveOnly, Deprovision`,
 							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+				},
+			},
+		},
+		"NestedXRGetsTheModeAnnotation": {
+			reason: "A composed XR should get the mode annotation and keep its own annotations, the bucket its policies, and the ConfigMap nothing",
+			args: args{
+				req: &fnv1.RunFunctionRequest{
+					Observed: xr("Provision"),
+					Desired:  desired(map[string]string{"bucket": bucket, "settings": configMap, "db": nestedXR}),
+				},
+			},
+			want: want{
+				rsp: &fnv1.RunFunctionResponse{
+					Meta:    &fnv1.ResponseMeta{Ttl: durationpb.New(response.DefaultTTL)},
+					Desired: desired(map[string]string{"bucket": bucketWith(`["Observe","Create","Update","LateInitialize"]`), "settings": configMap, "db": nestedXRWith("Provision")}),
+					Results: []*fnv1.Result{
+						{
+							Severity: fnv1.Severity_SEVERITY_NORMAL,
+							Message:  "Provision (from annotation lifecycle.fn.crossplane.io/mode): set managementPolicies [Observe Create Update LateInitialize] on 1 managed resources (1 skipped), mode annotation on 1 nested XRs",
+							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+					Conditions: []*fnv1.Condition{
+						{
+							Type:    "LifecycleMode",
+							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
+							Reason:  "Provision",
+							Message: new("Composed managed resources use managementPolicies [Observe Create Update LateInitialize] (mode from annotation lifecycle.fn.crossplane.io/mode)"),
+							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+				},
+			},
+		},
+		"ObservedNestedXRGetsTheModeAnnotation": {
+			reason: "When the composition doesn't set spec.crossplane on a nested XR, the observed resource tells it apart from a plain object",
+			args: args{
+				req: &fnv1.RunFunctionRequest{
+					Observed: &fnv1.State{
+						Composite: xr("ObserveOnly").GetComposite(),
+						Resources: map[string]*fnv1.Resource{"db": {Resource: resource.MustStructJSON(nestedXRObserved)}},
+					},
+					Desired: desired(map[string]string{"db": nestedXRTemplate}),
+				},
+			},
+			want: want{
+				rsp: &fnv1.RunFunctionResponse{
+					Meta:    &fnv1.ResponseMeta{Ttl: durationpb.New(response.DefaultTTL)},
+					Desired: desired(map[string]string{"db": nestedXRTemplateWith("ObserveOnly")}),
+					Results: []*fnv1.Result{
+						{
+							Severity: fnv1.Severity_SEVERITY_NORMAL,
+							Message:  "ObserveOnly (from annotation lifecycle.fn.crossplane.io/mode): set managementPolicies [Observe] on 0 managed resources (0 skipped), mode annotation on 1 nested XRs",
+							Target:   fnv1.Target_TARGET_COMPOSITE.Enum(),
+						},
+					},
+					Conditions: []*fnv1.Condition{
+						{
+							Type:    "LifecycleMode",
+							Status:  fnv1.Status_STATUS_CONDITION_TRUE,
+							Reason:  "ObserveOnly",
+							Message: new("Composed managed resources use managementPolicies [Observe] (mode from annotation lifecycle.fn.crossplane.io/mode)"),
+							Target:  fnv1.Target_TARGET_COMPOSITE.Enum(),
 						},
 					},
 				},

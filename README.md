@@ -103,8 +103,16 @@ kubectl delete app my-app
 
 ### What the function changes
 
-* It only changes desired resources that have `spec.forProvider`, which every
-  MR has. Plain Kubernetes objects and nested XRs are skipped.
+* It sets `spec.managementPolicies` on desired resources that have
+  `spec.forProvider`, which every MR has. Plain Kubernetes objects are skipped.
+* A composed resource that is itself an XR gets the
+  `lifecycle.fn.crossplane.io/mode` annotation with the resolved mode instead,
+  so its own composition's function-lifecycle step applies the same mode and a
+  whole tree follows one switch. The function tells an XR by the
+  `spec.crossplane` block Crossplane keeps its own fields in: on the desired
+  resource when the composition sets it, otherwise on the observed resource,
+  so an XR the composition doesn't pin to a composition is annotated from its
+  second reconcile on.
 * It overwrites `spec.managementPolicies` set by earlier pipeline steps.
 * The provider must support management policies. They're on by default in the
   upjet providers and provider-kubernetes, and off by default in the classic
